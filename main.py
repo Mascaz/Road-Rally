@@ -7,7 +7,9 @@ from panda3d.bullet import BulletPlaneShape;
 from panda3d.bullet import BulletCylinderShape;
 from panda3d.bullet import BulletVehicle;
 from panda3d.core import Vec3;
+from panda3d.core import Point3;
 from panda3d.bullet import ZUp;
+from direct.showbase.InputStateGlobal import inputState;
 
 class RoadRally(ShowBase):
 
@@ -17,6 +19,12 @@ class RoadRally(ShowBase):
         scene = BulletWorld();
         scene.setGravity(Vec3(0, 0, -9.81));
         base.setBackgroundColor(0.6,0.9,0.9);
+
+        #Controls
+        inputState.watchWithModifiers("F", "arrow_up")
+        inputState.watchWithModifiers("B", "arrow_down")
+        inputState.watchWithModifiers("L", "arrow_left")
+        inputState.watchWithModifiers("R", "arrow_right")
 
         #The ground
         self.ground = BulletPlaneShape(Vec3(0, 0, 1,), 1);
@@ -43,21 +51,60 @@ class RoadRally(ShowBase):
         Car_np.node().setDeactivationEnabled(False)
         scene.attachRigidBody(Car_node)
 
-        self.Car_sim = BulletVehicle(scene, Car_np.node())
-        self.Car_sim.setCoordinateSystem(ZUp)
-        scene.attachVehicle(self.Car_sim)
-
         #Load and transform the Car Actor
         self.car_model = loader.loadModel("Models/Car.egg");
         self.car_model.setPos(0, 20, -3);
         self.car_model.setHpr(180, 0, 0);
-        self.car_model.reparentTo(self.render);
         self.car_model.reparentTo(Car_np);
+
+        self.Car_sim = BulletVehicle(scene, Car_np.node());
+        self.Car_sim.setCoordinateSystem(ZUp);
+        scene.attachVehicle(self.Car_sim);
+
+        def Wheel(pos, r, f):
+            w = self.Car_sim.createWheel();
+            w.setChassisConnectionPointCs(pos);
+            w.setFrontWheel(f);
+            w.setWheelDirectionCs(Vec3(0, 0, -1));
+            w.setWheelAxleCs(Vec3(1, 0, 0));
+            w.setWheelRadius(r);
+            w.setMaxSuspensionTravelCm(40);
+            w.setSuspensionStiffness(120);
+            w.setWheelsDampingRelaxation(2.3);
+            w.setWheelsDampingCompression(4.4);
+            w.setFrictionSlip(50);
+            w.setRollInfluence(0.1);
+
+        #Wheels
+        Wheel(Point3(-1,1,-0.6), 0.4, False);
+        Wheel(Point3(-1.1,-1.2,-0.6), 0.4, True);
+        Wheel(Point3(1.1,-1,-0.6), 0.4, True);
+        Wheel(Point3(1,1,-0.6), 0.4, False);
+
+        def ProcessInput(dt):
+
+            engineForce = 0.0;
+
+            #Get the vehicle's current speed
+            self.carspeed = self.Car_sim.getCurrentSpeedKmHour();
+
+            if inputState.isSet("F"):
+                engineForce = 35;
+
+            if inputState.isSet("B"):
+                engineForce = 0.0;
+
+            #Apply forces to wheels
+            self.Car_sim.applyEngineForce(engineForce, 0);
+            self.Car_sim.applyEngineForce(engineForce, 3);
 
         def Update(task):
             dt = globalClock.getDt();
+            ProcessInput(dt);
             scene.doPhysics(dt, 5, 1.0/180.0);
             return task.cont;
+
+        taskMgr.add(Update, "Update");
 
 app = RoadRally();
 app.run();
