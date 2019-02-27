@@ -20,6 +20,9 @@ class RoadRally(ShowBase):
         scene.setGravity(Vec3(0, 0, -9.81));
         base.setBackgroundColor(0.6,0.9,0.9);
 
+        #Variables
+        self.steering = 0;
+
         #Controls
         inputState.watchWithModifiers("F", "arrow_up")
         inputState.watchWithModifiers("B", "arrow_down")
@@ -61,6 +64,12 @@ class RoadRally(ShowBase):
         self.Car_sim.setCoordinateSystem(ZUp);
         scene.attachVehicle(self.Car_sim);
 
+        #Camera
+        #base.disableMouse()
+        camera.reparentTo(Car_np);
+        camera.setPos(0, 0, 0);
+        camera.setHpr(0, 0, 0);
+
         def Wheel(pos, r, f):
             w = self.Car_sim.createWheel();
             w.setChassisConnectionPointCs(pos);
@@ -84,15 +93,50 @@ class RoadRally(ShowBase):
         def ProcessInput(dt):
 
             engineForce = 0.0;
+            self.steeringClamp = 35.0;
+            self.steeringIncrement = 70;
 
             #Get the vehicle's current speed
             self.carspeed = self.Car_sim.getCurrentSpeedKmHour();
+
+            #Reset the steering
+            if not inputState.isSet("L") and not inputState.isSet("R"):
+
+                if self.steering < 0.00:
+                    self.steering = self.steering + 0.6;
+                    if self.steering > 0.00:
+                        self.steering = self.steering - 0.6;
+
+                    if self.steering < 1.0 and self.steering > -1.0:
+                        self.steering = 0;
 
             if inputState.isSet("F"):
                 engineForce = 35;
 
             if inputState.isSet("B"):
-                engineForce = 0.0;
+                engineForce = -35;
+
+            #Left
+            if inputState.isSet("L"):
+                if self.steering < 0.0:
+                    #This makes the steering reset at the correct speed when turning from right to left
+                    self.steering += dt * self.steeringIncrement + 0.6;
+                    self.steering = min(self.steering, self.steeringClamp);
+                else:
+                    #Normal steering
+                    self.steering += dt * self.steeringIncrement;
+                    self.steering = min(self.steering, self.steeringClamp);
+
+			#Right
+            if inputState.isSet("R"):
+                if self.steering > 0.0:
+                    #This makes the steering reset at the correct speed when turning from left to right
+                    self.steering -= dt * self.steeringIncrement + 0.6;
+                    self.steering = max(self.steering, -self.steeringClamp);
+                else:
+                    #Normal steering
+                    self.steering -= dt * self.steeringIncrement;
+                    self.steering = max(self.steering, -self.steeringClamp);
 
             #Apply forces to wheels
             self.Car_sim.applyEngineForce(engineForce, 0);
